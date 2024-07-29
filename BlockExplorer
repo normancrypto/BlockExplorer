@@ -1,0 +1,76 @@
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+
+class BlockExplorer:
+    def __init__(self, api_key: str):
+        self.api_url = 'https://api.etherscan.io/api'
+        self.api_key = api_key
+
+    def get_block_details(self, block_number: int) -> dict:
+        params = {
+            'module': 'proxy',
+            'action': 'eth_getBlockByNumber',
+            'tag': hex(block_number),
+            'boolean': 'true',
+            'apikey': self.api_key
+        }
+        response = requests.get(self.api_url, params=params)
+        data = response.json()
+        return data['result'] if 'result' in data else {}
+
+    def get_block_transactions(self, block_number: int) -> pd.DataFrame:
+        block_data = self.get_block_details(block_number)
+        if 'transactions' not in block_data:
+            return pd.DataFrame()
+
+        transactions = []
+        for tx in block_data['transactions']:
+            transactions.append({
+                'hash': tx['hash'],
+                'from': tx['from'],
+                'to': tx['to'],
+                'value': int(tx['value'], 16),
+                'gas': int(tx['gas'], 16),
+                'gas_price': int(tx['gasPrice'], 16)
+            })
+        df = pd.DataFrame(transactions)
+        return df
+
+    def plot_transaction_data(self, block_number: int):
+        df = self.get_block_transactions(block_number)
+        if df.empty:
+            print("No transaction data found.")
+            return
+
+        fig, ax1 = plt.subplots(figsize=(12, 6))
+
+        ax1.set_xlabel('Transaction Hash')
+        ax1.set_ylabel('Value (wei)', color='tab:blue')
+        ax1.bar(df['hash'].head(10), df['value'].head(10), color='tab:blue', label='Value')
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
+        ax1.set_xticklabels(df['hash'].head(10), rotation=90)
+
+        ax2 = ax1.twinx()
+        ax2.set_ylabel('Gas Used', color='tab:green')
+        ax2.plot(df['hash'].head(10), df['gas'].head(10), color='tab:green', marker='o', linestyle='--', label='Gas Used')
+        ax2.tick_params(axis='y', labelcolor='tab:green')
+
+        plt.title(f'Block {block_number} Transactions: Value and Gas Used')
+        fig.tight_layout()
+        plt.show()
+
+# Example Usage
+if __name__ == "__main__":
+    ETHERSCAN_API_KEY = 'YOUR_ETHERSCAN_API_KEY'
+
+    block_explorer = BlockExplorer(api_key=ETHERSCAN_API_KEY)
+
+    # Fetch and Display Block Details
+    block_number = 17000000  # Replace with the block number you want to explore
+    block_details = block_explorer.get_block_details(block_number)
+    print(f"Block {block_number} Details:")
+    print(block_details)
+
+    # Fetch and Display Transactions for the Block and Plot Data
+    block_explorer.plot_transaction_data(block_number=block_number)
